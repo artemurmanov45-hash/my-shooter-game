@@ -1,76 +1,27 @@
 from ursina import *
 from ursina.prefabs.first_person_controller import FirstPersonController
 import random
+import time
 
 app = Ursina(borderless=False)
 
-# ------------------ НАСТРОЙКИ (увеличенные потолки) ------------------
+# ------------------ НАСТРОЙКИ ------------------
 ROOM_SIZE = 40
-WALL_HEIGHT = 6.0          # увеличено в 2 раза (было 3.0)
+WALL_HEIGHT = 6.0
 WALL_THICKNESS = 0.2
 DOOR_WIDTH = 2.0
-DOOR_HEIGHT = 3.0          # увеличена высота дверей
+DOOR_HEIGHT = 3.0
 WINDOW_WIDTH = 1.5
 WINDOW_HEIGHT = 1.5
-WINDOW_Y = 1.8             # фиксированная высота центра окна от пола
+WINDOW_Y = 1.8
+
+PLAYER_MAX_HEALTH = 100
 
 # ------------------ ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ------------------
 def create_window(x, y, z, width=1.5, height=1.5):
-    """
-    Создаёт окно с рамкой и стеклом.
-    Параметры:
-        x, y, z – координаты центра окна,
-        width, height – ширина и высота стекла (по умолчанию 1.5x1.5).
-    """
-    # Цвета (кортежи RGBA)
-    frame_color = (100, 80, 60, 255)      # коричневая рамка
-    glass_color = (150, 200, 255, 100)    # полупрозрачное голубое стекло
-
-    # Стекло
-    glass = Entity(
-        model='cube',
-        color=glass_color,
-        scale=(width, height, 0.05),
-        position=(x, y, z)
-    )
-
-    # Рамка – четыре планки
-    # Верхняя планка
-    Entity(
-        model='cube',
-        color=frame_color,
-        scale=(width, 0.05, 0.1),
-        position=(x, y + height/2, z)
-    )
-    # Нижняя планка
-    Entity(
-        model='cube',
-        color=frame_color,
-        scale=(width, 0.05, 0.1),
-        position=(x, y - height/2, z)
-    )
-    # Левая планка
-    Entity(
-        model='cube',
-        color=frame_color,
-        scale=(0.05, height, 0.1),
-        position=(x - width/2, y, z)
-    )
-    # Правая планка
-    Entity(
-        model='cube',
-        color=frame_color,
-        scale=(0.05, height, 0.1),
-        position=(x + width/2, y, z)
-    )
-    # Средняя горизонтальная перекладина (для красоты)
-    Entity(
-        model='cube',
-        color=frame_color,
-        scale=(width, 0.03, 0.1),
-        position=(x, y, z)
-    )
-    # Рамка
+    frame_color = (100, 80, 60, 255)
+    glass_color = (150, 200, 255, 100)
+    glass = Entity(model='cube', color=glass_color, scale=(width, height, 0.05), position=(x, y, z))
     Entity(model='cube', color=frame_color, scale=(width, 0.05, 0.1), position=(x, y + height/2, z))
     Entity(model='cube', color=frame_color, scale=(width, 0.05, 0.1), position=(x, y - height/2, z))
     Entity(model='cube', color=frame_color, scale=(0.05, height, 0.1), position=(x - width/2, y, z))
@@ -83,183 +34,83 @@ def create_room(x_offset, z_offset,
                 has_front_door=False, has_back_door=False,
                 has_window_left=False, has_window_right=False,
                 has_window_front=False, has_window_back=False,
-                floor_texture='dark_wood', wall_texture='ceiling.png'):
+                floor_texture='dark_wood', wall_texture='brick'):
     half = ROOM_SIZE / 2
     y_center = WALL_HEIGHT / 2
 
-    # Пол – теперь серый
-    floor = Entity(
-        model='cube',
-        texture=floor_texture,
-        scale=(ROOM_SIZE, 0.1, ROOM_SIZE),
-        position=(x_offset, -0.05, z_offset),
-        collider='box',
-        color=color.gray            # <-- изменено на серый
-    )
+    # Пол – серый (изменение: было color.white, стало color.gray)
+    Entity(model='cube', texture=floor_texture, scale=(ROOM_SIZE, 0.1, ROOM_SIZE),
+           position=(x_offset, -0.05, z_offset), collider='box', color=color.gray)
 
-    # Потолок – теперь серый
-    ceiling = Entity(
-        model='cube',
-        texture='tile',
-        scale=(ROOM_SIZE, 0.1, ROOM_SIZE),
-        position=(x_offset, WALL_HEIGHT, z_offset),
-        color=color.gray            # <-- изменено на серый (было (40,40,40,255))
-    )
+    # Потолок
+    Entity(model='cube', texture='tile', scale=(ROOM_SIZE, 0.1, ROOM_SIZE),
+           position=(x_offset, WALL_HEIGHT, z_offset), color=color.gray)
 
-    # Стены – с увеличенной детализацией текстур (texture_scale)
-    # Задняя (Z-)
-    wall_z_neg = Entity(
-        model='cube',
-        texture=wall_texture,
-        texture_scale=(8, 8),        # повтор текстуры 8x8 для мелкого кирпича
-        scale=(ROOM_SIZE, WALL_HEIGHT, WALL_THICKNESS),
-        position=(x_offset, y_center, z_offset - half),
-        collider='box'
-    )
-    # Передняя (Z+)
-    wall_z_pos = Entity(
-        model='cube',
-        texture=wall_texture,
-        texture_scale=(8, 8),
-        scale=(ROOM_SIZE, WALL_HEIGHT, WALL_THICKNESS),
-        position=(x_offset, y_center, z_offset + half),
-        collider='box'
-    )
-    # Левая (X-)
-    wall_x_neg = Entity(
-        model='cube',
-        texture=wall_texture,
-        texture_scale=(8, 8),
-        scale=(WALL_THICKNESS, WALL_HEIGHT, ROOM_SIZE),
-        position=(x_offset - half, y_center, z_offset),
-        collider='box'
-    )
-    # Правая (X+)
-    wall_x_pos = Entity(
-        model='cube',
-        texture=wall_texture,
-        texture_scale=(8, 8),
-        scale=(WALL_THICKNESS, WALL_HEIGHT, ROOM_SIZE),
-        position=(x_offset + half, y_center, z_offset),
-        collider='box'
-    )
+    # Стены
+    wall_z_neg = Entity(model='cube', texture=wall_texture, texture_scale=(8, 8),
+                        scale=(ROOM_SIZE, WALL_HEIGHT, WALL_THICKNESS),
+                        position=(x_offset, y_center, z_offset - half), collider='box')
+    wall_z_pos = Entity(model='cube', texture=wall_texture, texture_scale=(8, 8),
+                        scale=(ROOM_SIZE, WALL_HEIGHT, WALL_THICKNESS),
+                        position=(x_offset, y_center, z_offset + half), collider='box')
+    wall_x_neg = Entity(model='cube', texture=wall_texture, texture_scale=(8, 8),
+                        scale=(WALL_THICKNESS, WALL_HEIGHT, ROOM_SIZE),
+                        position=(x_offset - half, y_center, z_offset), collider='box')
+    wall_x_pos = Entity(model='cube', texture=wall_texture, texture_scale=(8, 8),
+                        scale=(WALL_THICKNESS, WALL_HEIGHT, ROOM_SIZE),
+                        position=(x_offset + half, y_center, z_offset), collider='box')
 
-    # ---- ДВЕРНЫЕ ПРОЁМЫ (увеличенной высоты) ----
+    # Двери
     if has_left_door:
         destroy(wall_x_neg)
         half_door = (ROOM_SIZE - DOOR_WIDTH) / 2
-        # Левая часть стены
-        Entity(
-            model='cube',
-            texture=wall_texture,
-            texture_scale=(8, 8),
-            scale=(WALL_THICKNESS, WALL_HEIGHT, half_door),
-            position=(x_offset - half, y_center, z_offset - half_door/2),
-            collider='box'
-        )
-        # Правая часть стены
-        Entity(
-            model='cube',
-            texture=wall_texture,
-            texture_scale=(8, 8),
-            scale=(WALL_THICKNESS, WALL_HEIGHT, half_door),
-            position=(x_offset - half, y_center, z_offset + half_door/2),
-            collider='box'
-        )
-        # Верхняя часть над дверью (перемычка) – теперь она выше
-        Entity(
-            model='cube',
-            texture=wall_texture,
-            texture_scale=(8, 8),
-            scale=(WALL_THICKNESS, WALL_HEIGHT - DOOR_HEIGHT, DOOR_WIDTH),
-            position=(x_offset - half, (WALL_HEIGHT - DOOR_HEIGHT)/2 + DOOR_HEIGHT, z_offset),
-            collider='box'
-        )
+        Entity(model='cube', texture=wall_texture, texture_scale=(8, 8),
+               scale=(WALL_THICKNESS, WALL_HEIGHT, half_door),
+               position=(x_offset - half, y_center, z_offset - half_door/2), collider='box')
+        Entity(model='cube', texture=wall_texture, texture_scale=(8, 8),
+               scale=(WALL_THICKNESS, WALL_HEIGHT, half_door),
+               position=(x_offset - half, y_center, z_offset + half_door/2), collider='box')
+        Entity(model='cube', texture=wall_texture, texture_scale=(8, 8),
+               scale=(WALL_THICKNESS, WALL_HEIGHT - DOOR_HEIGHT, DOOR_WIDTH),
+               position=(x_offset - half, (WALL_HEIGHT - DOOR_HEIGHT)/2 + DOOR_HEIGHT, z_offset), collider='box')
     if has_right_door:
         destroy(wall_x_pos)
         half_door = (ROOM_SIZE - DOOR_WIDTH) / 2
-        Entity(
-            model='cube',
-            texture=wall_texture,
-            texture_scale=(8, 8),
-            scale=(WALL_THICKNESS, WALL_HEIGHT, half_door),
-            position=(x_offset + half, y_center, z_offset - half_door/2),
-            collider='box'
-        )
-        Entity(
-            model='cube',
-            texture=wall_texture,
-            texture_scale=(8, 8),
-            scale=(WALL_THICKNESS, WALL_HEIGHT, half_door),
-            position=(x_offset + half, y_center, z_offset + half_door/2),
-            collider='box'
-        )
-        Entity(
-            model='cube',
-            texture=wall_texture,
-            texture_scale=(8, 8),
-            scale=(WALL_THICKNESS, WALL_HEIGHT - DOOR_HEIGHT, DOOR_WIDTH),
-            position=(x_offset + half, (WALL_HEIGHT - DOOR_HEIGHT)/2 + DOOR_HEIGHT, z_offset),
-            collider='box'
-        )
-
-    # Двери на передней и задней стенах
+        Entity(model='cube', texture=wall_texture, texture_scale=(8, 8),
+               scale=(WALL_THICKNESS, WALL_HEIGHT, half_door),
+               position=(x_offset + half, y_center, z_offset - half_door/2), collider='box')
+        Entity(model='cube', texture=wall_texture, texture_scale=(8, 8),
+               scale=(WALL_THICKNESS, WALL_HEIGHT, half_door),
+               position=(x_offset + half, y_center, z_offset + half_door/2), collider='box')
+        Entity(model='cube', texture=wall_texture, texture_scale=(8, 8),
+               scale=(WALL_THICKNESS, WALL_HEIGHT - DOOR_HEIGHT, DOOR_WIDTH),
+               position=(x_offset + half, (WALL_HEIGHT - DOOR_HEIGHT)/2 + DOOR_HEIGHT, z_offset), collider='box')
     if has_front_door:
         destroy(wall_z_pos)
         half_door = (ROOM_SIZE - DOOR_WIDTH) / 2
-        Entity(
-            model='cube',
-            texture=wall_texture,
-            texture_scale=(8, 8),
-            scale=(half_door, WALL_HEIGHT, WALL_THICKNESS),
-            position=(x_offset - half_door/2, y_center, z_offset + half),
-            collider='box'
-        )
-        Entity(
-            model='cube',
-            texture=wall_texture,
-            texture_scale=(8, 8),
-            scale=(half_door, WALL_HEIGHT, WALL_THICKNESS),
-            position=(x_offset + half_door/2, y_center, z_offset + half),
-            collider='box'
-        )
-        Entity(
-            model='cube',
-            texture=wall_texture,
-            texture_scale=(8, 8),
-            scale=(DOOR_WIDTH, WALL_HEIGHT - DOOR_HEIGHT, WALL_THICKNESS),
-            position=(x_offset, (WALL_HEIGHT - DOOR_HEIGHT)/2 + DOOR_HEIGHT, z_offset + half),
-            collider='box'
-        )
+        Entity(model='cube', texture=wall_texture, texture_scale=(8, 8),
+               scale=(half_door, WALL_HEIGHT, WALL_THICKNESS),
+               position=(x_offset - half_door/2, y_center, z_offset + half), collider='box')
+        Entity(model='cube', texture=wall_texture, texture_scale=(8, 8),
+               scale=(half_door, WALL_HEIGHT, WALL_THICKNESS),
+               position=(x_offset + half_door/2, y_center, z_offset + half), collider='box')
+        Entity(model='cube', texture=wall_texture, texture_scale=(8, 8),
+               scale=(DOOR_WIDTH, WALL_HEIGHT - DOOR_HEIGHT, WALL_THICKNESS),
+               position=(x_offset, (WALL_HEIGHT - DOOR_HEIGHT)/2 + DOOR_HEIGHT, z_offset + half), collider='box')
     if has_back_door:
         destroy(wall_z_neg)
         half_door = (ROOM_SIZE - DOOR_WIDTH) / 2
-        Entity(
-            model='cube',
-            texture=wall_texture,
-            texture_scale=(8, 8),
-            scale=(half_door, WALL_HEIGHT, WALL_THICKNESS),
-            position=(x_offset - half_door/2, y_center, z_offset - half),
-            collider='box'
-        )
-        Entity(
-            model='cube',
-            texture=wall_texture,
-            texture_scale=(8, 8),
-            scale=(half_door, WALL_HEIGHT, WALL_THICKNESS),
-            position=(x_offset + half_door/2, y_center, z_offset - half),
-            collider='box'
-        )
-        Entity(
-            model='cube',
-            texture=wall_texture,
-            texture_scale=(8, 8),
-            scale=(DOOR_WIDTH, WALL_HEIGHT - DOOR_HEIGHT, WALL_THICKNESS),
-            position=(x_offset, (WALL_HEIGHT - DOOR_HEIGHT)/2 + DOOR_HEIGHT, z_offset - half),
-            collider='box'
-        )
+        Entity(model='cube', texture=wall_texture, texture_scale=(8, 8),
+               scale=(half_door, WALL_HEIGHT, WALL_THICKNESS),
+               position=(x_offset - half_door/2, y_center, z_offset - half), collider='box')
+        Entity(model='cube', texture=wall_texture, texture_scale=(8, 8),
+               scale=(half_door, WALL_HEIGHT, WALL_THICKNESS),
+               position=(x_offset + half_door/2, y_center, z_offset - half), collider='box')
+        Entity(model='cube', texture=wall_texture, texture_scale=(8, 8),
+               scale=(DOOR_WIDTH, WALL_HEIGHT - DOOR_HEIGHT, WALL_THICKNESS),
+               position=(x_offset, (WALL_HEIGHT - DOOR_HEIGHT)/2 + DOOR_HEIGHT, z_offset - half), collider='box')
 
-    # ---- ОКНА (на фиксированной высоте) ----
+    # Окна
     if has_window_back:
         for i in range(-1, 2):
             create_window(x_offset + i*3, WINDOW_Y, z_offset - half - 0.1)
@@ -273,30 +124,17 @@ def create_room(x_offset, z_offset,
         for i in range(-1, 2):
             create_window(x_offset + half + 0.1, WINDOW_Y, z_offset + i*3)
 
-    # ---- ОСВЕЩЕНИЕ (поднято под потолок) ----
-    light = PointLight(
-        position=(x_offset, WALL_HEIGHT - 0.3, z_offset),
-        color=color.rgb(255, 240, 200),
-        intensity=2.0,
-        range=30
-    )
-    lamp = Entity(
-        model='cube',
-        color=color.rgb(200, 200, 200),
-        scale=(0.3, 0.1, 0.3),
-        position=(x_offset, WALL_HEIGHT - 0.1, z_offset)
-    )
+    PointLight(position=(x_offset, WALL_HEIGHT - 0.3, z_offset),
+               color=color.rgb(255, 240, 200), intensity=2.0, range=30)
+    Entity(model='cube', color=color.rgb(200, 200, 200),
+           scale=(0.3, 0.1, 0.3), position=(x_offset, WALL_HEIGHT - 0.1, z_offset))
 
-# ---- СОЗДАНИЕ СЕТКИ КОМНАТ (квадратный периметр) ----
-grid_size = 3  # 3x3 = 9 комнат (можно увеличить)
-# Вычисляем сдвиг, чтобы центр сетки оказался в (0,0)
+# ---- ГЕНЕРАЦИЯ СЕТКИ КОМНАТ ----
+grid_size = 3
 offset_x = -(grid_size - 1) * ROOM_SIZE / 2
 offset_z = -(grid_size - 1) * ROOM_SIZE / 2
-
-# Соберём центры всех комнат для использования во врагах
 room_centers = []
 
-# Полный путь к текстуре пола
 floor_texture_path = r'C:\Users\123398\Desktop\Разработка\Game\ceiling.png'
 
 for ix in range(grid_size):
@@ -304,19 +142,14 @@ for ix in range(grid_size):
         x = ix * ROOM_SIZE + offset_x
         z = iz * ROOM_SIZE + offset_z
         room_centers.append((x, z))
-
-        # Определяем наличие дверей по соседям
         has_left = (ix > 0)
         has_right = (ix < grid_size - 1)
-        has_front = (iz < grid_size - 1)  # Z+
-        has_back = (iz > 0)               # Z-
-
-        # Окна только на внешних стенах, где нет дверей
+        has_front = (iz < grid_size - 1)
+        has_back = (iz > 0)
         win_left = (ix == 0)
         win_right = (ix == grid_size - 1)
         win_front = (iz == grid_size - 1)
         win_back = (iz == 0)
-
         create_room(x, z,
                     has_left_door=has_left,
                     has_right_door=has_right,
@@ -329,167 +162,166 @@ for ix in range(grid_size):
                     floor_texture=floor_texture_path,
                     wall_texture='brick')
 
-# ---- ДВЕРНЫЕ РАМЫ (декоративные) для всех проёмов ----
+# ---- ДВЕРНЫЕ РАМЫ ----
 for ix in range(grid_size):
     for iz in range(grid_size):
         x = ix * ROOM_SIZE + offset_x
         z = iz * ROOM_SIZE + offset_z
-        # Горизонтальные рамы (между комнатами по X)
         if ix < grid_size - 1:
-            Entity(
-                model='cube',
-                color=color.rgb(100, 80, 60),
-                scale=(0.1, DOOR_HEIGHT, DOOR_WIDTH + 0.2),
-                position=(x + ROOM_SIZE/2, DOOR_HEIGHT/2, z)
-            )
-        # Вертикальные рамы (между комнатами по Z)
+            Entity(model='cube', color=color.rgb(100, 80, 60),
+                   scale=(0.1, DOOR_HEIGHT, DOOR_WIDTH + 0.2),
+                   position=(x + ROOM_SIZE/2, DOOR_HEIGHT/2, z))
         if iz < grid_size - 1:
-            Entity(
-                model='cube',
-                color=color.rgb(100, 80, 60),
-                scale=(DOOR_WIDTH + 0.2, DOOR_HEIGHT, 0.1),
-                position=(x, DOOR_HEIGHT/2, z + ROOM_SIZE/2)
-            )
+            Entity(model='cube', color=color.rgb(100, 80, 60),
+                   scale=(DOOR_WIDTH + 0.2, DOOR_HEIGHT, 0.1),
+                   position=(x, DOOR_HEIGHT/2, z + ROOM_SIZE/2))
 
-# ---- ИГРОК (перемещён в центр) ----
+# ---- ИГРОК ----
 player = FirstPersonController()
-player.position = (0, 1, 0)   # теперь старт в центральной комнате
-base_speed = 10                # обычная скорость ходьбы
+player.position = (0, 1, 0)
+base_speed = 10
+player_health = PLAYER_MAX_HEALTH
 
 # ---- ОРУЖИЕ ----
-gun = Entity(
-    parent=camera,
-    model='cube',
-    color=color.dark_gray,
-    scale=(0.2, 0.1, 0.5),
-    position=(0.3, -0.2, 0.5)
-)
-barrel = Entity(
-    parent=gun,
-    model='cube',
-    color=color.black,
-    scale=(0.1, 0.08, 0.2),
-    position=(0, 0, 0.35)
-)
-grip = Entity(
-    parent=gun,
-    model='cube',
-    color=color.brown,
-    scale=(0.12, 0.2, 0.1),
-    position=(0, -0.15, -0.1)
-)
+gun = Entity(parent=camera, model='cube', color=color.dark_gray,
+             scale=(0.2, 0.1, 0.5), position=(0.3, -0.2, 0.5))
+Entity(parent=gun, model='cube', color=color.black,
+       scale=(0.1, 0.08, 0.2), position=(0, 0, 0.35))
+Entity(parent=gun, model='cube', color=color.brown,
+       scale=(0.12, 0.2, 0.1), position=(0, -0.15, -0.1))
 
-# ---- ВРАГИ (по 4 на комнату) ----
+# ---- ИНТЕРФЕЙС ----
+health_text = Text(text=f'Health: {player_health}', position=(-0.85, 0.35), scale=2)
+message_text = Text(text='', position=(0, 0.2), origin=(0,0), scale=3, color=color.red)
+
+# ---- ВРАГИ ----
+def create_enemy_body(pos, scale_factor=1.0, body_color=color.red):
+    body = Entity(position=pos, scale=scale_factor)
+    Entity(parent=body, model='cube', color=body_color, scale=(0.6, 0.8, 0.4), position=(0, 0.9, 0))
+    Entity(parent=body, model='sphere', color=color.peach, scale=(0.5, 0.5, 0.5), position=(0, 1.6, 0))
+    Entity(parent=body, model='cube', color=color.orange, scale=(0.2, 0.7, 0.2), position=(-0.4, 0.8, 0))
+    Entity(parent=body, model='cube', color=color.orange, scale=(0.2, 0.7, 0.2), position=(0.4, 0.8, 0))
+    Entity(parent=body, model='cube', color=color.brown, scale=(0.25, 0.8, 0.25), position=(-0.2, 0.1, 0))
+    Entity(parent=body, model='cube', color=color.brown, scale=(0.25, 0.8, 0.25), position=(0.2, 0.1, 0))
+    return body
+
 enemies = []
-def create_enemy():
-    if room_centers:
-        cx, cz = random.choice(room_centers)
-        x = cx + random.uniform(-18, 18)
-        z = cz + random.uniform(-18, 18)
-        enemy = Entity(model='sphere', color=color.black, scale=0.5, position=(x, 0.5, z))
-        enemies.append(enemy)
+boss_spawned = False
+game_over = False
 
-for _ in range(grid_size * grid_size * 4):
-    create_enemy()
+def spawn_enemy(is_boss=False):
+    if not room_centers:
+        return
+    cx, cz = random.choice(room_centers)
+    x = cx + random.uniform(-18, 18)
+    z = cz + random.uniform(-18, 18)
+    if is_boss:
+        scale = 2.0
+        health = 5
+        body_color = color.magenta
+    else:
+        scale = 1.0
+        health = 1
+        body_color = color.red
+    enemy_entity = create_enemy_body((x, 0, z), scale_factor=scale, body_color=body_color)
+    enemies.append({'entity': enemy_entity, 'health': health, 'is_boss': is_boss})
 
-score = 0
-score_text = Text(text='Score: 0', position=(-0.85, 0.45), scale=2)
+for _ in range(20):
+    spawn_enemy(is_boss=False)
 
-# ---- СПИСОК АКТИВНЫХ ПУЛЬ ----
+# ---- ПУЛИ ----
 bullets = []
 
 def create_bullet():
-    # Создаём пулю
     start_pos = player.position + player.forward * 0.8 + Vec3(0, 0.2, 0)
-    bullet = Entity(
-        model='cube',
-        color=color.yellow,
-        scale=(0.05, 0.05, 0.2),
-        position=start_pos,
-        rotation=player.rotation
-    )
-    # Свечение
-    Entity(
-        parent=bullet,
-        model='sphere',
-        color=color.white,
-        scale=(0.1, 0.1, 0.1)
-    )
+    bullet = Entity(model='cube', color=color.yellow, scale=(0.05, 0.05, 0.2),
+                    position=start_pos, rotation=player.rotation)
+    Entity(parent=bullet, model='sphere', color=color.white, scale=(0.1, 0.1, 0.1))
     bullet.velocity = player.forward * 30
-    bullet.lifetime = 1.0   # живёт 1 секунду, если не попала
+    bullet.lifetime = 1.0
     bullets.append(bullet)
 
 def spawn_explosion(pos):
-    # Эффект взрыва
     for _ in range(10):
-        p = Entity(
-            model='cube',
-            color=color.red,
-            scale=0.1,
-            position=pos,
-            rotation=random.random() * 360
-        )
-        p.velocity = (
-            Vec3(random.uniform(-1, 1), random.uniform(-1, 1), random.uniform(-1, 1)).normalized()
-            * random.uniform(3, 6)
-        )
+        p = Entity(model='cube', color=color.red, scale=0.1, position=pos, rotation=random.random()*360)
+        p.velocity = (Vec3(random.uniform(-1,1), random.uniform(-1,1), random.uniform(-1,1)).normalized()
+                      * random.uniform(3,6))
         destroy(p, delay=0.3)
-    # Звук попадания (если файла нет, ошибки не будет)
     try:
         Audio('shot_echo', loop=False, autoplay=True)
     except:
         pass
 
+last_damage_time = 0
+damage_cooldown = 1.0
+
 def update():
-    global score
-    # ---- БЕГ (ускорение при зажатом Shift) ----
+    global player_health, boss_spawned, game_over, last_damage_time
+
+    if game_over:
+        return
+
     if held_keys['shift']:
-        player.speed = base_speed * 3   # в 3 раза быстрее
+        player.speed = base_speed * 3
     else:
         player.speed = base_speed
 
-    # ---- ДВИЖЕНИЕ ПУЛЬ И ПРОВЕРКА ПОПАДАНИЙ ----
     for bullet in bullets[:]:
         bullet.position += bullet.velocity * time.dt
         bullet.lifetime -= time.dt
         hit = False
-        for enemy in enemies[:]:
-            if distance(bullet.position, enemy.position) < 0.8:
-                spawn_explosion(enemy.position)
-                destroy(enemy)
-                enemies.remove(enemy)
-                create_enemy()
-                score += 1
+        for enemy_data in enemies[:]:
+            enemy_entity = enemy_data['entity']
+            if distance(bullet.position, enemy_entity.position) < 0.8:
+                enemy_data['health'] -= 1
+                spawn_explosion(enemy_entity.position)
+                if enemy_data['health'] <= 0:
+                    destroy(enemy_entity)
+                    enemies.remove(enemy_data)
+                    if enemy_data['is_boss']:
+                        message_text.text = 'Игра пройдена!'
+                        game_over = True
+                    else:
+                        if not boss_spawned and len(enemies) == 0:
+                            spawn_enemy(is_boss=True)
+                            boss_spawned = True
                 hit = True
                 break
         if hit or bullet.lifetime <= 0:
-            destroy(bullet)
-            bullets.remove(bullet)
+            if bullet in bullets:
+                destroy(bullet)
+                bullets.remove(bullet)
 
-    # ---- ДВИЖЕНИЕ ВРАГОВ ----
-    for enemy in enemies[:]:
-        dir = (player.position - enemy.position)
-        dir.y = 0
-        if dir.length() > 0.5:
-            enemy.position += dir.normalized() * time.dt * 1.5
-        if distance(enemy.position, player.position) < 1.5:
-            destroy(enemy)
-            enemies.remove(enemy)
-            create_enemy()
-    score_text.text = f'Score: {score}'
+    for enemy_data in enemies:
+        enemy_entity = enemy_data['entity']
+        dir_to_player = player.position - enemy_entity.position
+        dir_to_player.y = 0
+        if dir_to_player.length() > 0.5:
+            enemy_entity.position += dir_to_player.normalized() * time.dt * 3.0
+
+        if distance(enemy_entity.position, player.position) < 1.5:
+            if time.time() - last_damage_time > damage_cooldown:
+                if enemy_data['is_boss']:
+                    damage = 30
+                else:
+                    damage = 10
+                player_health -= damage
+                last_damage_time = time.time()
+                if player_health <= 0:
+                    player_health = 0
+                    message_text.text = 'Игра окончена'
+                    game_over = True
+                health_text.text = f'Health: {player_health}'
+
+    health_text.text = f'Health: {player_health}'
 
 def input(key):
-    global score
-    if key == 'left mouse down':
-        # Отдача оружия
+    if key == 'left mouse down' and not game_over:
         gun.position = (0.3, -0.2, 0.3)
         invoke(setattr, gun, 'position', (0.3, -0.2, 0.5), delay=0.1)
-
         create_bullet()
     if key == 'escape':
         app.quit()
 
-# Глобальное освещение
 AmbientLight(color=color.rgba(50, 50, 50, 0.3))
-
 app.run()
