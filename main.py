@@ -4,13 +4,13 @@ from ursina.prefabs.first_person_controller import FirstPersonController
 import random
 import time
 import sys
-import os   # <-- добавили для получения текущей директории
+import os
 
 import settings
 from room import generate_rooms
 from player import create_player
 from ui import create_ui
-from enemy import spawn_enemy, spawn_explosion
+from enemy import Enemy, spawn_enemy, spawn_explosion   # импортируем класс Enemy
 
 # ------------------ ДИАГНОСТИКА ------------------
 print("=== НАЧАЛО СКРИПТА ===")
@@ -21,6 +21,13 @@ print("Версия Python:", sys.version)
 print("==========================================")
 
 app = Ursina(borderless=False)
+
+# ------------------ ЗВУК ВЫСТРЕЛА ------------------
+try:
+    gunshot_sound = Audio(settings.SOUND_GUNSHOT, loop=False, autoplay=False)
+except:
+    gunshot_sound = None
+    print("Звук выстрела не найден, будет без звука.")
 
 # ------------------ ГЛАВНОЕ МЕНЮ ------------------
 menu_bg = Entity(model='quad', scale=(2, 1), color=color.black, z=1)
@@ -49,7 +56,7 @@ def start_game():
     global game_started, player, gun, base_speed, player_health, health_text, message_text
     global enemies, boss_spawned, game_over, bullets, last_damage_time, room_centers
 
-    print("start_game() вызвана")   # <-- диагностика
+    print("start_game() вызвана")
 
     try:
         # Убираем меню
@@ -71,10 +78,13 @@ def start_game():
         health_text, message_text = create_ui(player_health)
         print("UI создан")
 
-        # Враги
+        # Враги (теперь это объекты класса Enemy)
         print("Спавн 20 врагов...")
         for _ in range(20):
-            spawn_enemy(room_centers, enemies, is_boss=False)
+            # spawn_enemy теперь возвращает объект Enemy
+            enemy = spawn_enemy(room_centers, enemies, is_boss=False)
+            if enemy:
+                enemy.target = player   # передаём ссылку на игрока для движения
         print("Враги созданы")
 
         boss_spawned = False
@@ -88,8 +98,6 @@ def start_game():
         print("!!! ОШИБКА В start_game():", e)
         import traceback
         traceback.print_exc()
-        # Чтобы окно не закрылось сразу, можно оставить сообщение
-        # Но лучше дать возможность увидеть ошибку в консоли.
 
 btn_start.on_click = start_game
 btn_exit.on_click = application.quit
@@ -106,26 +114,27 @@ def update():
     else:
         player.speed = base_speed
 
-    # Пули
+    # ------------------ ПУЛИ ------------------
     for bullet in bullets[:]:
         bullet.position += bullet.velocity * time.dt
         bullet.lifetime -= time.dt
         hit = False
         for enemy_data in enemies[:]:
-            enemy_entity = enemy_data['entity']
+            enemy_entity = enemy_data['entity']  # это объект Enemy
             if distance(bullet.position, enemy_entity.position) < 0.8:
-                enemy_data['health'] -= 1
-                spawn_explosion(enemy_entity.position)
-                if enemy_data['health'] <= 0:
-                    destroy(enemy_entity)
+                # Наносим урон через метод take_damage
+                if enemy_entity.take_damage(1):  # возвращает True, если враг убит
                     enemies.remove(enemy_data)
                     if enemy_data['is_boss']:
                         message_text.text = 'Игра пройдена!'
                         game_over = True
                     else:
+                        # Если обычных врагов больше нет, спавним босса
                         if not boss_spawned and len(enemies) == 0:
-                            spawn_enemy(room_centers, enemies, is_boss=True)
-                            boss_spawned = True
+                            boss = spawn_enemy(room_centers, enemies, is_boss=True)
+                            if boss:
+                                boss.target = player
+                                boss_spawned = True
                 hit = True
                 break
         if hit or bullet.lifetime <= 0:
@@ -133,14 +142,10 @@ def update():
                 destroy(bullet)
                 bullets.remove(bullet)
 
-    # Движение врагов и урон
+    # ------------------ УРОН ИГРОКУ ОТ ВРАГОВ ------------------
+    # Враги теперь двигаются сами, мы только проверяем столкновения
     for enemy_data in enemies:
         enemy_entity = enemy_data['entity']
-        dir_to_player = player.position - enemy_entity.position
-        dir_to_player.y = 0
-        if dir_to_player.length() > 0.5:
-            enemy_entity.position += dir_to_player.normalized() * time.dt * 3.0
-
         if distance(enemy_entity.position, player.position) < 1.5:
             if time.time() - last_damage_time > damage_cooldown:
                 if enemy_data['is_boss']:
@@ -168,6 +173,11 @@ def input(key):
         # Отдача оружия
         gun.position = (0.3, -0.2, 0.3)
         invoke(setattr, gun, 'position', (0.3, -0.2, 0.5), delay=0.1)
+
+        # Звук выстрела
+        if gunshot_sound:
+            gunshot_sound.play()
+
         # Создание пули
         start_pos = player.position + player.forward * 0.8 + Vec3(0, 0.2, 0)
         bullet = Entity(model='cube', color=color.yellow, scale=(0.05, 0.05, 0.2),
