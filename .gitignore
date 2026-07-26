@@ -1,0 +1,14 @@
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.db
+*.sqlite3
+.DS_Store
+Thumbs.db
+*.log
+.vscode/
+.idea/
+*.tmp
+*.temp
+start_game.bat   # можно оставить, но если хотите добавить в репозиторий – не включайте в .gitignore
