@@ -5,151 +5,247 @@ import random
 app = Ursina(borderless=False)
 
 # ------------------ НАСТРОЙКИ ------------------
-# Размеры комнат (в метрах) - увеличены в 10 раз
 ROOM_SIZE = 40
-WALL_HEIGHT = 10          # высота стен (было 2.5)
-WALL_THICKNESS = 0.4      # чуть толще
+WALL_HEIGHT = 3.0          # чуть выше для окон
+WALL_THICKNESS = 0.2
 
-# Для дверного проёма (увеличим пропорционально)
-DOOR_WIDTH = 2.5
-DOOR_HEIGHT = 5.0
+# ------------------ ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ------------------
+def create_window(parent_wall, x, y, z, width=1.5, height=1.5, orientation='z'):
+    """
+    Создаёт окно на стене: проём (прозрачный) и стекло.
+    parent_wall – Entity стены, на которой делаем окно (но мы просто создаём отдельно).
+    Параметры: координаты центра окна, ширина, высота, ориентация ('x' или 'z').
+    """
+    # Рамка окна (декоративная)
+    frame_color = color.rgb(100, 80, 60)
+    # Стекло (полупрозрачное)
+    glass = Entity(
+        model='cube',
+        color=color.rgba(150, 200, 255, 100),  # полупрозрачный голубой
+        scale=(width, height, 0.05),
+        position=(x, y, z)
+    )
+    # Рамка (четыре бруска)
+    # Верхний
+    frame_top = Entity(
+        model='cube',
+        color=frame_color,
+        scale=(width, 0.05, 0.1),
+        position=(x, y + height/2, z)
+    )
+    frame_bottom = Entity(
+        model='cube',
+        color=frame_color,
+        scale=(width, 0.05, 0.1),
+        position=(x, y - height/2, z)
+    )
+    frame_left = Entity(
+        model='cube',
+        color=frame_color,
+        scale=(0.05, height, 0.1),
+        position=(x - width/2, y, z)
+    )
+    frame_right = Entity(
+        model='cube',
+        color=frame_color,
+        scale=(0.05, height, 0.1),
+        position=(x + width/2, y, z)
+    )
+    # Перекладина (горизонтальная) – для красоты
+    frame_mid = Entity(
+        model='cube',
+        color=frame_color,
+        scale=(width, 0.03, 0.1),
+        position=(x, y, z)
+    )
+    return glass
 
-# ------------------ ПОСТРОЕНИЕ КОМНАТ ------------------
-def create_room(x_offset, z_offset, has_door=False, door_side='right'):
+def create_room(x_offset, z_offset, has_left_door=False, has_right_door=False,
+                has_window_left=False, has_window_right=False,
+                has_window_front=False, has_window_back=False,
+                floor_texture='dark_wood', wall_texture='brick'):
     half = ROOM_SIZE / 2
     y_center = WALL_HEIGHT / 2
 
-    # Пол
+    # Пол (тёмный)
     floor = Entity(
         model='cube',
-        texture='wood',
+        texture=floor_texture,
         scale=(ROOM_SIZE, 0.1, ROOM_SIZE),
         position=(x_offset, -0.05, z_offset),
-        collider='box'
+        collider='box',
+        color=color.rgb(60, 40, 30)  # тёмный оттенок
     )
 
-    # Потолок
+    # Потолок (светлая плитка)
     ceiling = Entity(
         model='cube',
-        texture='white_cube',
+        texture='tile',
         scale=(ROOM_SIZE, 0.1, ROOM_SIZE),
-        position=(x_offset, WALL_HEIGHT, z_offset)
+        position=(x_offset, WALL_HEIGHT, z_offset),
+        color=color.rgb(230, 230, 230)
     )
 
-    # Стены
-    # Задняя (Z = z_offset - half)
+    # ---- СТЕНЫ ----
+    # Задняя (Z-)
     wall_z_neg = Entity(
         model='cube',
-        texture='brick',
+        texture=wall_texture,
         scale=(ROOM_SIZE, WALL_HEIGHT, WALL_THICKNESS),
         position=(x_offset, y_center, z_offset - half),
         collider='box'
     )
-    # Передняя (Z = z_offset + half)
+    # Передняя (Z+)
     wall_z_pos = Entity(
         model='cube',
-        texture='brick',
+        texture=wall_texture,
         scale=(ROOM_SIZE, WALL_HEIGHT, WALL_THICKNESS),
         position=(x_offset, y_center, z_offset + half),
         collider='box'
     )
-    # Левая (X = x_offset - half)
+    # Левая (X-)
     wall_x_neg = Entity(
         model='cube',
-        texture='brick',
+        texture=wall_texture,
         scale=(WALL_THICKNESS, WALL_HEIGHT, ROOM_SIZE),
         position=(x_offset - half, y_center, z_offset),
         collider='box'
     )
-    # Правая (X = x_offset + half) - может быть заменена на дверь
+    # Правая (X+)
     wall_x_pos = Entity(
         model='cube',
-        texture='brick',
+        texture=wall_texture,
         scale=(WALL_THICKNESS, WALL_HEIGHT, ROOM_SIZE),
         position=(x_offset + half, y_center, z_offset),
         collider='box'
     )
 
-    if has_door:
-        # Удаляем целую стену, затем создаём части с проёмом
-        # Определяем, на какой стене делать дверь
-        if door_side == 'right':
-            destroy(wall_x_pos)
-            half_door = (ROOM_SIZE - DOOR_WIDTH) / 2
-            # Левая часть стены (от центра стены влево)
-            wall_left_door = Entity(
-                model='cube',
-                texture='brick',
-                scale=(WALL_THICKNESS, WALL_HEIGHT, half_door),
-                position=(x_offset + half, y_center, z_offset - half_door/2),
-                collider='box'
-            )
-            # Правая часть стены
-            wall_right_door = Entity(
-                model='cube',
-                texture='brick',
-                scale=(WALL_THICKNESS, WALL_HEIGHT, half_door),
-                position=(x_offset + half, y_center, z_offset + half_door/2),
-                collider='box'
-            )
-            # Перемычка над дверью
-            lintel = Entity(
-                model='cube',
-                texture='brick',
-                scale=(WALL_THICKNESS, WALL_HEIGHT - DOOR_HEIGHT, DOOR_WIDTH),
-                position=(x_offset + half, (WALL_HEIGHT - DOOR_HEIGHT)/2 + DOOR_HEIGHT, z_offset),
-                collider='box'
-            )
-        elif door_side == 'left':
-            destroy(wall_x_neg)
-            half_door = (ROOM_SIZE - DOOR_WIDTH) / 2
-            wall_left_door = Entity(
-                model='cube',
-                texture='brick',
-                scale=(WALL_THICKNESS, WALL_HEIGHT, half_door),
-                position=(x_offset - half, y_center, z_offset - half_door/2),
-                collider='box'
-            )
-            wall_right_door = Entity(
-                model='cube',
-                texture='brick',
-                scale=(WALL_THICKNESS, WALL_HEIGHT, half_door),
-                position=(x_offset - half, y_center, z_offset + half_door/2),
-                collider='box'
-            )
-            lintel = Entity(
-                model='cube',
-                texture='brick',
-                scale=(WALL_THICKNESS, WALL_HEIGHT - DOOR_HEIGHT, DOOR_WIDTH),
-                position=(x_offset - half, (WALL_HEIGHT - DOOR_HEIGHT)/2 + DOOR_HEIGHT, z_offset),
-                collider='box'
-            )
+    # ---- ДВЕРНЫЕ ПРОЁМЫ ----
+    door_width = 2.0
+    door_height = 2.5
 
-# Создаём две комнаты: левая (x = -25) и правая (x = 25), между ними дверь
-create_room(-25, 0, has_door=True, door_side='right')
-create_room(25, 0, has_door=True, door_side='left')
+    if has_left_door:
+        destroy(wall_x_neg)
+        half_door = (ROOM_SIZE - door_width) / 2
+        wall_left_door = Entity(
+            model='cube',
+            texture=wall_texture,
+            scale=(WALL_THICKNESS, WALL_HEIGHT, half_door),
+            position=(x_offset - half, y_center, z_offset - half_door/2),
+            collider='box'
+        )
+        wall_right_door = Entity(
+            model='cube',
+            texture=wall_texture,
+            scale=(WALL_THICKNESS, WALL_HEIGHT, half_door),
+            position=(x_offset - half, y_center, z_offset + half_door/2),
+            collider='box'
+        )
+    if has_right_door:
+        destroy(wall_x_pos)
+        half_door = (ROOM_SIZE - door_width) / 2
+        wall_left_door = Entity(
+            model='cube',
+            texture=wall_texture,
+            scale=(WALL_THICKNESS, WALL_HEIGHT, half_door),
+            position=(x_offset + half, y_center, z_offset - half_door/2),
+            collider='box'
+        )
+        wall_right_door = Entity(
+            model='cube',
+            texture=wall_texture,
+            scale=(WALL_THICKNESS, WALL_HEIGHT, half_door),
+            position=(x_offset + half, y_center, z_offset + half_door/2),
+            collider='box'
+        )
 
-# Декоративная дверная рама (между комнатами)
-door_frame_color = color.rgb(100, 80, 60)
-frame = Entity(
+    # ---- ОКНА ----
+    # Размещаем окна на стенах, если они не имеют дверей
+    # Окна на задней стене (Z-)
+    if has_window_back:
+        for i in range(-1, 2):  # три окна
+            create_window(None, x_offset + i*3, WALL_HEIGHT*0.6, z_offset - half - 0.1,
+                          width=1.5, height=1.5, orientation='z')
+    # Окна на передней стене (Z+)
+    if has_window_front:
+        for i in range(-1, 2):
+            create_window(None, x_offset + i*3, WALL_HEIGHT*0.6, z_offset + half + 0.1,
+                          width=1.5, height=1.5, orientation='z')
+    # Окна на левой стене (X-) – только если нет двери
+    if has_window_left and not has_left_door:
+        for i in range(-1, 2):
+            create_window(None, x_offset - half - 0.1, WALL_HEIGHT*0.6, z_offset + i*3,
+                          width=1.5, height=1.5, orientation='x')
+    # Окна на правой стене (X+) – только если нет двери
+    if has_window_right and not has_right_door:
+        for i in range(-1, 2):
+            create_window(None, x_offset + half + 0.1, WALL_HEIGHT*0.6, z_offset + i*3,
+                          width=1.5, height=1.5, orientation='x')
+
+    # ---- ОСВЕЩЕНИЕ (светильники) ----
+    light = PointLight(
+        position=(x_offset, WALL_HEIGHT - 0.3, z_offset),
+        color=color.rgb(255, 240, 200),
+        intensity=2.0,
+        range=30
+    )
+    lamp = Entity(
+        model='cube',
+        color=color.rgb(200, 200, 200),
+        scale=(0.3, 0.1, 0.3),
+        position=(x_offset, WALL_HEIGHT - 0.1, z_offset)
+    )
+
+# ---- СОЗДАНИЕ ТРЁХ КОМНАТ (в ряд по оси X) ----
+# Левая комната (центр x=-40) – имеет правую дверь, окна на трёх стенах (кроме правой)
+create_room(-40, 0,
+            has_right_door=True,
+            has_window_left=True,
+            has_window_front=True,
+            has_window_back=True,
+            floor_texture='dark_wood', wall_texture='brick')
+
+# Центральная комната (центр x=0) – имеет две двери (левую и правую), окна спереди и сзади
+create_room(0, 0,
+            has_left_door=True,
+            has_right_door=True,
+            has_window_front=True,
+            has_window_back=True,
+            floor_texture='dark_wood', wall_texture='brick')
+
+# Правая комната (центр x=40) – имеет левую дверь, окна на трёх стенах
+create_room(40, 0,
+            has_left_door=True,
+            has_window_right=True,
+            has_window_front=True,
+            has_window_back=True,
+            floor_texture='dark_wood', wall_texture='brick')
+
+# Декоративные дверные рамы (в проёмах)
+frame1 = Entity(
     model='cube',
-    color=door_frame_color,
-    scale=(0.1, WALL_HEIGHT, DOOR_WIDTH + 0.4),
-    position=(0, WALL_HEIGHT/2, 0)
+    color=color.rgb(100, 80, 60),
+    scale=(0.1, WALL_HEIGHT, 2.2),
+    position=(-20, WALL_HEIGHT/2, 0)
+)
+frame2 = Entity(
+    model='cube',
+    color=color.rgb(100, 80, 60),
+    scale=(0.1, WALL_HEIGHT, 2.2),
+    position=(20, WALL_HEIGHT/2, 0)
 )
 
-# ------------------ ИГРОК ------------------
+# ---- ИГРОК ----
 player = FirstPersonController()
-player.position = (-15, 2, 0)  # внутри левой комнаты, не у стены
+player.position = (-30, 1, 0)  # старт в левой комнате
 
-# ------------------ ОРУЖИЕ (пистолет) ------------------
+# ---- ОРУЖИЕ (пистолет) ----
 gun = Entity(
     parent=camera,
     model='cube',
     color=color.dark_gray,
     scale=(0.2, 0.1, 0.5),
-    position=(0.3, -0.2, 0.5),
-    rotation=(0, 0, 0)
+    position=(0.3, -0.2, 0.5)
 )
 barrel = Entity(
     parent=gun,
@@ -166,16 +262,21 @@ grip = Entity(
     position=(0, -0.15, -0.1)
 )
 
-# ------------------ ВРАГИ (красные шары) ------------------
+# ---- ВРАГИ (разбросаны по всем комнатам) ----
 enemies = []
 def create_enemy():
-    # Спавним врагов в правой комнате (от 15 до 35 по X, Z в пределах -15..15)
-    x = random.uniform(15, 35)
-    z = random.uniform(-15, 15)
-    enemy = Entity(model='sphere', color=color.red, scale=0.7, position=(x, 0.5, z))
+    room = random.choice(['left', 'center', 'right'])
+    if room == 'left':
+        x = random.uniform(-35, -5)
+    elif room == 'center':
+        x = random.uniform(-18, 18)
+    else:
+        x = random.uniform(5, 35)
+    z = random.uniform(-18, 18)
+    enemy = Entity(model='sphere', color=color.red, scale=0.5, position=(x, 0.5, z))
     enemies.append(enemy)
 
-for _ in range(8):  # больше врагов для большой карты
+for _ in range(20):   # больше врагов
     create_enemy()
 
 score = 0
@@ -187,8 +288,8 @@ def update():
         dir = (player.position - enemy.position)
         dir.y = 0
         if dir.length() > 0.5:
-            enemy.position += dir.normalized() * time.dt * 2.0  # чуть быстрее
-        if distance(enemy.position, player.position) < 2.0:  # увеличен радиус касания
+            enemy.position += dir.normalized() * time.dt * 1.5
+        if distance(enemy.position, player.position) < 1.5:
             destroy(enemy)
             enemies.remove(enemy)
             create_enemy()
@@ -197,12 +298,11 @@ def update():
 def input(key):
     global score
     if key == 'left mouse down':
-        # Отдача
         gun.position = (0.3, -0.2, 0.3)
         invoke(setattr, gun, 'position', (0.3, -0.2, 0.5), delay=0.1)
 
         bullet = Entity(model='sphere', color=color.yellow, scale=0.1, position=player.position + player.forward*0.5)
-        bullet.velocity = player.forward * 40  # пуля быстрее
+        bullet.velocity = player.forward * 30
         for enemy in enemies[:]:
             if distance(bullet.position, enemy.position) < 1.0:
                 destroy(enemy)
@@ -214,9 +314,7 @@ def input(key):
     if key == 'escape':
         app.quit()
 
-# ------------------ ОСВЕЩЕНИЕ ------------------
-pivot = Entity()
-DirectionalLight(parent=pivot, y=5, z=10, rotation=(45, -45, 0))
-AmbientLight(color=color.rgba(100,100,100,0.5))
+# Глобальное освещение (приглушённое)
+AmbientLight(color=color.rgba(50, 50, 50, 0.3))
 
 app.run()
