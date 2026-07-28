@@ -11,4 +11,7 @@ Thumbs.db
 .idea/
 *.tmp
 *.temp
-start_game.bat   # можно оставить, но если хотите добавить в репозиторий – не включайте в .gitignore
+start_game.bat   # можно оставить, но если хотите добавить в репозиторий – не включайте в .gitignore__pycache__/
+dist/
+build/
+*.spec
