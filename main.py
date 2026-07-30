@@ -21,7 +21,7 @@ print("==========================================")
 
 app = Ursina(borderless=False, size=(settings.WINDOW_WIDTH, settings.WINDOW_HEIGHT))
 application.fps = 60
-window.vsync = False
+window.vsync = True
 
 try:
     gunshot_sound = Audio(settings.SOUND_GUNSHOT, loop=False, autoplay=False,
@@ -464,8 +464,8 @@ def update():
         return
 
     # ---------- ОТЛАДКА ПОЗИЦИИ ИГРОКА ----------
-    if player:
-        print(f"Игрок на позиции: {player.position}")
+    # if player:
+      #  print(f"Игрок на позиции: {player.position}")
 
     # Защита от проваливания
     if player:

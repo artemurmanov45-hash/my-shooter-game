@@ -1,5 +1,7 @@
-ROOM_SIZE = 40
-WALL_HEIGHT = 40.0
+
+# ---------- ОКРУЖЕНИЕ ----------
+ROOM_SIZE = 100
+WALL_HEIGHT = 20.0
 WALL_THICKNESS = 0.2
 DOOR_WIDTH = 8.0
 DOOR_HEIGHT = 3.0
@@ -10,8 +12,8 @@ PLAYER_MAX_HEALTH = 100
 GRID_SIZE = 3
 
 # ---------- НАСТРОЙКИ ОКНА ----------
-WINDOW_WIDTH = 1280
-WINDOW_HEIGHT = 720
+WINDOW_WIDTH = 1380
+WINDOW_HEIGHT = 820
 
 # ---------- ТЕКСТУРЫ ----------
 TEXTURE_FLOOR = 'textures/floor.jpg'
