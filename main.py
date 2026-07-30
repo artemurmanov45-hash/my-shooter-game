@@ -12,7 +12,6 @@ from player import create_player
 from ui import create_ui, create_ammo_ui, update_ammo_ui
 from enemy import Enemy, spawn_enemy, spawn_explosion
 
-# ------------------ ДИАГНОСТИКА ------------------
 print("=== НАЧАЛО СКРИПТА ===")
 print("Текущая директория:", os.getcwd())
 print("Интерпретатор Python:", sys.executable)
@@ -24,7 +23,6 @@ app = Ursina(borderless=False, size=(settings.WINDOW_WIDTH, settings.WINDOW_HEIG
 application.fps = 60
 window.vsync = False
 
-# ------------------ ЗВУКИ И МУЗЫКА ------------------
 try:
     gunshot_sound = Audio(settings.SOUND_GUNSHOT, loop=False, autoplay=False,
                           volume=getattr(settings, 'VOLUME_GUNSHOT', 1.0))
@@ -40,6 +38,8 @@ try:
                        volume=getattr(settings, 'VOLUME_GAME_MUSIC', 1.0))
     reload_sound = Audio(settings.SOUND_RELOAD, loop=False, autoplay=False,
                          volume=getattr(settings, 'VOLUME_RELOAD', 1.0))
+    voice_reload_sound = Audio(settings.SOUND_VOICE_RELOAD, loop=False, autoplay=False,
+                               volume=getattr(settings, 'VOLUME_VOICE_RELOAD', 1.0))
 except:
     gunshot_sound = None
     enemy_shot_sound = None
@@ -48,6 +48,7 @@ except:
     menu_music = None
     game_music = None
     reload_sound = None
+    voice_reload_sound = None
     print("Звуки не найдены, будут без звука.")
 
 if menu_music:
@@ -61,7 +62,6 @@ def play_click_and_pause_music():
         menu_music.stop()
         invoke(lambda: menu_music.play() if menu_music else None, delay=0.2)
 
-# ------------------ ГЛАВНОЕ МЕНЮ ------------------
 try:
     menu_bg_texture = settings.TEXTURE_MENU_BG
 except:
@@ -110,35 +110,31 @@ pickups = []
 inventory = [None, None, None]
 inventory_ui = []
 
-# ---------- ПЕРЕМЕННЫЕ ДЛЯ ПАТРОНОВ ----------
-ammo_clip = 100
-ammo_reserve = 10000
-max_clip = 100
+ammo_clip = 100                        # патроны в текущем магазине
+ammo_reserve = 10000                   # запасные патроны
+max_clip = 17                         # максимальная вместимость магазина
 reloading = False
 reload_timer = 0
 reload_time = 2.0
 
-# ---------- ПЕРЕМЕННЫЕ ДЛЯ ВОЛН ----------
 current_wave = 0
 waves = [
-    {'count': 10, 'health': 1,   'scale': 1,   'color': color.red,     'label': 'Волна 1: Обычные враги'},
-    {'count': 5,  'health': 10,  'scale': 2,   'color': color.magenta, 'label': 'Волна 2: Боссы'},
-    {'count': 3,  'health': 25,  'scale': 4,   'color': color.gold,    'label': 'Волна 3: Мегабоссы'},
+    {'count': 5, 'health': 1,   'scale': 1,   'color': color.red,     'label': 'Волна 1: Обычные враги'},
+    {'count': 3,  'health': 10,  'scale': 2,   'color': color.magenta, 'label': 'Волна 2: Боссы'},
+    {'count': 1,  'health': 25,  'scale': 4,   'color': color.gold,    'label': 'Волна 3: Мегабоссы'},
 ]
 wave_message_timer = 0
 
-# ---------- ПРИЦЕЛИВАНИЕ ----------
-aiming = False
-default_fov = 90
-aim_fov = 60
-default_gun_pos = Vec3(0.3, -0.2, 0.5)
-aim_gun_pos = Vec3(0.0, -0.05, 0.25)
-reload_gun_pos = Vec3(0.2, -0.5, 0.2)
-current_gun_pos = default_gun_pos
-current_fov = default_fov
-aim_speed = 8.0
+aiming = False                                  # состояние прицеливания (меняется в input)
+default_fov = 90                                # обычное поле зрения
+aim_fov = 60                                    # поле зрения при прицеливании (зум)
+default_gun_pos = Vec3(0.3, -0.2, 0.5)          # обычное положение
+aim_gun_pos = Vec3(0.0, -0.03, 0.25)            # положение при прицеливании
+reload_gun_pos = Vec3(0.2, -0.5, 0.2)           # положение при перезарядке
+current_gun_pos = default_gun_pos               # текущая позиция (интерполируется)
+current_fov = default_fov                       # текущее FOV
+aim_speed = 8.0                                 # скорость перехода (плавность)
 
-# ---------- ОТДАЧА ----------
 recoil_offset = Vec3(0, 0, 0)
 recoil_target = Vec3(0, 0, 0)
 recoil_speed = 12.0
@@ -146,121 +142,13 @@ recoil_speed = 12.0
 fire_timer = 0
 fire_interval = 1 / settings.FIRE_RATE
 
-# ---------- КЛАСС ЛИФТА ----------
-class Elevator:
-    def __init__(self, position, floors=[0, -1]):
-        self.position = position
-        self.floors = floors
-        self.current_floor = 0
-        self.target_floor = 0
-        self.moving = False
-        self.speed = getattr(settings, 'ELEVATOR_SPEED', 4.0)
-        self.y = 0.0
-        self.target_y = 0.0
-        self.door_progress = 1.0
-        self.door_target = 1.0
-        self.door_speed = 2.0
-
-        cabin_width = 4.0
-        cabin_depth = 4.0
-        cabin_height = 5.0
-        half_w = cabin_width / 2
-        half_d = cabin_depth / 2
-
-        shaft_height = WALL_HEIGHT * 2 + 0.5
-        shaft_color = color.rgb(70, 70, 70)
-        self.shaft_left = Entity(model='cube', color=shaft_color, scale=(0.2, shaft_height, cabin_depth + 1),
-                                 position=(position[0] - half_w - 0.5, 0, position[1]))
-        self.shaft_right = Entity(model='cube', color=shaft_color, scale=(0.2, shaft_height, cabin_depth + 1),
-                                  position=(position[0] + half_w + 0.5, 0, position[1]))
-        self.shaft_back = Entity(model='cube', color=shaft_color, scale=(cabin_width + 1, shaft_height, 0.2),
-                                 position=(position[0], 0, position[1] - half_d - 0.5))
-        for floor in self.floors:
-            y_floor = floor * WALL_HEIGHT
-            if WALL_HEIGHT - 3.0 > 0:
-                Entity(model='cube', color=shaft_color, scale=(cabin_width + 1, WALL_HEIGHT - 3.0, 0.2),
-                       position=(position[0], y_floor + 3.0 + (WALL_HEIGHT - 3.0)/2, position[1] + half_d + 0.5))
-            Entity(model='cube', color=shaft_color, scale=(cabin_width + 1, 0.2, 0.2),
-                   position=(position[0], y_floor + 0.1, position[1] + half_d + 0.5))
-            side_width = (cabin_width + 1 - 3.0) / 2
-            if side_width > 0:
-                Entity(model='cube', color=shaft_color, scale=(side_width, 3.0, 0.2),
-                       position=(position[0] - (cabin_width + 1)/2 + side_width/2, y_floor + 1.5, position[1] + half_d + 0.5))
-                Entity(model='cube', color=shaft_color, scale=(side_width, 3.0, 0.2),
-                       position=(position[0] + (cabin_width + 1)/2 - side_width/2, y_floor + 1.5, position[1] + half_d + 0.5))
-
-        self.cabin = Entity(model='cube', color=color.rgb(80, 80, 80), scale=(cabin_width, cabin_height, cabin_depth),
-                            position=(position[0], self.y + cabin_height/2, position[1]), collider='box')
-        self.door_left = Entity(parent=self.cabin, model='cube', color=color.rgb(160, 160, 160),
-                                scale=(cabin_width/2 - 0.1, cabin_height - 0.2, 0.1),
-                                position=(-cabin_width/2 + 0.1, 0, cabin_depth/2 + 0.05))
-        self.door_right = Entity(parent=self.cabin, model='cube', color=color.rgb(160, 160, 160),
-                                 scale=(cabin_width/2 - 0.1, cabin_height - 0.2, 0.1),
-                                 position=(cabin_width/2 - 0.1, 0, cabin_depth/2 + 0.05))
-
-        self.call_buttons = []
-        for i, floor in enumerate(self.floors):
-            y_pos = floor * WALL_HEIGHT + 0.5
-            btn = Entity(model='cube', color=color.green if i == 0 else color.gray, scale=(0.5, 0.5, 0.1),
-                         position=(position[0] + half_w + 1.0, y_pos, position[1] + half_d + 0.5), collider='box')
-            btn.floor_index = i
-            Text(text=f'Вызов {i+1}', position=btn.position + Vec3(0, 0.4, 0), scale=0.3, color=color.white)
-            self.call_buttons.append(btn)
-
-    def call(self, floor_index):
-        if self.moving:
-            return
-        if floor_index == self.current_floor:
-            return
-        self.door_target = 0.0
-        self.target_floor = floor_index
-        self.target_y = self.floors[floor_index] * WALL_HEIGHT
-        self.moving = True
-        for i, btn in enumerate(self.call_buttons):
-            btn.color = color.red if i == floor_index else color.gray
-
-    def toggle_doors(self):
-        if not self.moving:
-            self.door_target = 1.0 if self.door_progress < 0.5 else 0.0
-
-    def update(self):
-        if abs(self.door_progress - self.door_target) > 0.001:
-            step = self.door_speed * time.dt
-            if self.door_progress < self.door_target:
-                self.door_progress = min(self.door_progress + step, self.door_target)
-            else:
-                self.door_progress = max(self.door_progress - step, self.door_target)
-            cabin_width = self.cabin.scale_x
-            offset = (cabin_width/2 - 0.1) * (1 - self.door_progress)
-            self.door_left.x = -cabin_width/2 + 0.1 + offset
-            self.door_right.x = cabin_width/2 - 0.1 - offset
-
-        if self.moving:
-            diff = self.target_y - self.y
-            if abs(diff) > 0.01:
-                step = self.speed * time.dt
-                if abs(diff) < step:
-                    self.y = self.target_y
-                else:
-                    self.y += step if diff > 0 else -step
-                self.cabin.y = self.y + self.cabin.scale_y / 2
-            else:
-                self.y = self.target_y
-                self.cabin.y = self.y + self.cabin.scale_y / 2
-                self.moving = False
-                self.current_floor = self.target_floor
-                self.door_target = 1.0
-                for i, btn in enumerate(self.call_buttons):
-                    btn.color = color.green if i == self.current_floor else color.gray
-
-    def get_floor_y(self, floor_index):
-        return self.floors[floor_index] * WALL_HEIGHT
-
 elevator = None
 elevator_nearby = False
 elevator_hint_text = None
 
-# ---------- ФУНКЦИЯ СОЗДАНИЯ ПИКАПОВ (ИСПРАВЛЕНА) ----------
+# <-- НОВОЕ: флаг, была ли уже первая перезарядка (для голосовой реплики)
+first_reload_done = False
+
 def spawn_weapon_pickups(count_per_floor):
     global pickups
     pickups.clear()
@@ -274,8 +162,7 @@ def spawn_weapon_pickups(count_per_floor):
             cx, cz = available[i]
             x = cx + random.uniform(-10, 10)
             z = cz + random.uniform(-10, 10)
-            y = y_base + 0.5
-            # Всегда указываем цвет, чтобы избежать None
+            y = y_base + 1.0
             pickup = Entity(
                 model=model_path if os.path.exists(model_path) else 'cube',
                 color=color.yellow if not os.path.exists(model_path) else color.white,
@@ -284,10 +171,9 @@ def spawn_weapon_pickups(count_per_floor):
                 collider='box'
             )
             pickup.pickup_type = 'weapon'
-            pickup.weapon_index = 1   # индекс второго оружия
+            pickup.weapon_index = 1
             pickups.append(pickup)
 
-# ---------- ФУНКЦИЯ ОБНОВЛЕНИЯ UI ИНВЕНТАРЯ ----------
 def update_inventory_ui():
     global inventory_ui
     for item in inventory_ui:
@@ -300,7 +186,6 @@ def update_inventory_ui():
             Text(text=str(i+1), position=(-0.2 + i*0.1, -0.43), scale=1, color=color.white, parent=camera.ui)
         inventory_ui.append(cell)
 
-# ---------- ФУНКЦИЯ ПЕРЕКЛЮЧЕНИЯ ОРУЖИЯ ----------
 def switch_weapon(index):
     global active_weapon_index
     if index < 0 or index >= len(weapons):
@@ -311,7 +196,6 @@ def switch_weapon(index):
     active_weapon_index = index
     weapons[active_weapon_index].entity.visible = True
 
-# ---------- ФУНКЦИИ ДЛЯ ПУЛЬ, ПЕРЕЗАРЯДКИ И Т.Д. ----------
 def create_enemy_bullet(start_pos, direction, damage=1):
     bullet = Entity(model='sphere', color=color.blue, scale=0.1,
                     position=start_pos, collider='sphere')
@@ -342,7 +226,7 @@ def start_reload():
     invoke(lambda: gun.set_position(default_gun_pos), delay=reload_time)
 
 def finish_reload():
-    global ammo_clip, ammo_reserve, reloading
+    global ammo_clip, ammo_reserve, reloading, first_reload_done   # <-- добавили first_reload_done
     needed = max_clip - ammo_clip
     if ammo_reserve >= needed:
         ammo_clip = max_clip
@@ -353,6 +237,11 @@ def finish_reload():
     reloading = False
     update_ammo_ui(ammo_text, ammo_clip, ammo_reserve)
     message_text.text = ''
+
+    # <-- НОВОЕ: проигрываем голосовую реплику только при первой перезарядке
+    if voice_reload_sound and not first_reload_done:
+        voice_reload_sound.play()
+        first_reload_done = True
 
 def fire_bullet():
     global ammo_clip, bullets, player, reloading, recoil_target
@@ -400,7 +289,7 @@ def spawn_health_packs(count=8):
         cx, cz = random.choice(room_centers)
         x = cx + random.uniform(-15, 15)
         z = cz + random.uniform(-15, 15)
-        y = 0.5
+        y = 1.0
         pack = Entity(
             position=(x, y, z),
             model='cube',
@@ -415,6 +304,7 @@ def spawn_health_packs(count=8):
         health_packs.append(pack)
 
 def start_wave(wave_index):
+    print("start_wave вызвана, индекс:", wave_index)
     global current_wave, wave_message_timer, game_over
     if wave_index >= len(waves):
         message_text.text = 'Поздравляем! Вы прошли все волны!'
@@ -426,13 +316,15 @@ def start_wave(wave_index):
     message_text.text = wave['label']
     wave_message_timer = 3.0
 
-    for _ in range(wave['count']):
+    for i in range(wave['count']):
+        print(f"Создаю врага №{i+1}")
         enemy = spawn_enemy(room_centers, enemies,
                             health=wave['health'],
                             scale=wave['scale'],
                             color=wave['color'],
                             armed=True,
-                            shoot_callback=create_enemy_bullet)
+                            shoot_callback=create_enemy_bullet,
+                            player_pos=player.position)
         if enemy:
             enemy.target = player
             enemy.shoot_sound = enemy_shot_sound
@@ -443,8 +335,16 @@ def start_game():
     global last_damage_time, room_centers, health_packs, pickups, inventory
     global current_wave, wave_message_timer, exit_doors, ammo_clip, ammo_reserve, reloading
     global elevator, elevator_hint_text, current_fov, current_gun_pos
+    global first_reload_done   # <-- добавили сброс флага
 
     print("start_game() вызвана")
+
+    # ---------- ИНДИКАТОР ЗАГРУЗКИ ----------
+    loading_text = Text(text='Загрузка...', position=(0, 0.2), origin=(0,0), scale=2, color=color.white)
+    base.step()
+    time.sleep(0.02)  # пауза, чтобы текст отобразился
+
+    # Очистка старых объектов
     for obj in building_objects:
         destroy(obj)
     building_objects.clear()
@@ -464,6 +364,7 @@ def start_game():
     reloading = False
     current_fov = default_fov
     current_gun_pos = default_gun_pos
+    first_reload_done = False   # <-- сбрасываем при старте новой игры
 
     try:
         destroy(menu_bg)
@@ -476,10 +377,17 @@ def start_game():
         if game_music and not game_music.playing:
             game_music.play()
 
+        # ----- ГЕНЕРАЦИЯ КОМНАТ -----
+        loading_text.text = 'Генерация комнат...'
+        base.step()
+        time.sleep(0.02)
         room_centers, exit_doors = generate_grid_rooms()
         print(f"Сгенерировано комнат: {len(room_centers)}")
 
-        print("Создание игрока...")
+        # ----- ИГРОК И ОРУЖИЕ -----
+        loading_text.text = 'Создание игрока...'
+        base.step()
+        time.sleep(0.02)
         player, weapons, active_weapon_index, base_speed, player_health = create_player()
         inventory[0] = 0
         weapons[1].entity.visible = False
@@ -487,33 +395,35 @@ def start_game():
 
         if room_centers:
             first_room = room_centers[0]
-            player.position = (first_room[0] - 5, 0.6, first_room[1] - 5)
+            player.position = (first_room[0] - 5, 1.0, first_room[1] - 5)
         else:
-            player.position = (0, 0.6, 0)
+            player.position = (0, 1.0, 0)
 
-        elevator_pos = getattr(settings, 'ELEVATOR_POSITION', (0, 0))
-        elevator = Elevator(elevator_pos, floors=[0, -1])
-        elevator.y = 0.0
-        elevator.cabin.y = elevator.cabin.scale_y / 2
-        elevator.door_progress = 1.0
-        elevator.door_target = 1.0
-        elevator.door_left.x = -elevator.cabin.scale_x/2 + 0.1
-        elevator.door_right.x = elevator.cabin.scale_x/2 - 0.1
+        player.velocity = Vec3(0, 0, 0)
+        player.grounded = True
 
-        elevator_hint_text = Text(text='Нажмите E, чтобы вызвать лифт', position=(0, -0.3), origin=(0,0), scale=1.5, color=color.white, enabled=False)
-
-        print("Создание UI...")
+        # ----- UI -----
+        loading_text.text = 'Создание интерфейса...'
+        base.step()
+        time.sleep(0.02)
         health_text, message_text = create_ui(player_health)
         ammo_text = create_ammo_ui(ammo_clip, ammo_reserve)
 
-        print("Спавн аптечек...")
+        # ----- АПТЕЧКИ -----
+        loading_text.text = 'Спавн аптечек...'
+        base.step()
+        time.sleep(0.02)
         spawn_health_packs(8)
 
-        print("Спавн пикапов оружия...")
+        # ----- ПИКАПЫ ОРУЖИЯ -----
+        loading_text.text = 'Спавн оружия...'
+        base.step()
+        time.sleep(0.02)
         spawn_weapon_pickups(settings.PICKUP_COUNT_PER_FLOOR)
 
         update_inventory_ui()
 
+        # ----- ВРАГИ -----
         enemies.clear()
         bullets.clear()
         enemy_bullets.clear()
@@ -522,11 +432,18 @@ def start_game():
         current_wave = 0
         wave_message_timer = 0
 
+        loading_text.text = 'Создание врагов...'
+        base.step()
+        time.sleep(0.02)
         start_wave(0)
+
+        # ----- УДАЛЯЕМ ИНДИКАТОР -----
+        destroy(loading_text)
 
         game_started = True
         print("Игра успешно запущена!")
     except Exception as e:
+        destroy(loading_text)
         print("!!! ОШИБКА В start_game():", e)
         import traceback
         traceback.print_exc()
@@ -534,7 +451,6 @@ def start_game():
 btn_start.on_click = start_game
 btn_exit.on_click = application.quit
 
-# ---------- ОБНОВЛЕНИЕ ----------
 def update():
     global player_health, game_over, last_damage_time, health_packs, fire_timer
     global current_wave, wave_message_timer, reloading, reload_timer
@@ -547,6 +463,22 @@ def update():
     if not game_started or game_over:
         return
 
+    # ---------- ОТЛАДКА ПОЗИЦИИ ИГРОКА ----------
+    if player:
+        print(f"Игрок на позиции: {player.position}")
+
+    # Защита от проваливания
+    if player:
+        if -WALL_HEIGHT < player.y < 1.0:
+            player.y = 1.0
+            player.velocity.y = 0
+            player.grounded = True
+        if player.y < -WALL_HEIGHT - 2:
+            player.position = (player.x, -WALL_HEIGHT + 1.0, player.z)
+            player.velocity = Vec3(0, 0, 0)
+            player.grounded = True
+            message_text.text = 'Вы провалились в подвал!'
+
     gun = weapons[active_weapon_index]
     if reloading:
         target = reload_gun_pos
@@ -558,7 +490,6 @@ def update():
     gun.entity.position = current_gun_pos
     recoil_target = lerp(recoil_target, Vec3(0,0,0), time.dt * recoil_speed * 0.8)
 
-    # Подбор оружия
     for pickup in pickups[:]:
         if distance(player.position, pickup.position) < 1.5:
             free_slot = None
@@ -584,27 +515,6 @@ def update():
                 update_inventory_ui()
                 message_text.text = 'Оружие заменено!'
                 invoke(lambda: setattr(message_text, 'text', ''), delay=1)
-
-    if elevator and player:
-        dist = distance(player.position, Vec3(elevator.position[0], player.y, elevator.position[1]))
-        if dist < 3.0:
-            elevator_nearby = True
-            if elevator_hint_text:
-                elevator_hint_text.enabled = True
-        else:
-            elevator_nearby = False
-            if elevator_hint_text:
-                elevator_hint_text.enabled = False
-
-    if elevator:
-        elevator.update()
-
-    if player:
-        if player.y < -WALL_HEIGHT - 2:
-            player.position = (player.x, -WALL_HEIGHT + 0.6, player.z)
-            player.velocity = Vec3(0, 0, 0)
-            player.grounded = True
-            message_text.text = 'Вы провалились в подвал!'
 
     target_fov = aim_fov if aiming else default_fov
     current_fov = lerp(current_fov, target_fov, time.dt * aim_speed)
@@ -640,7 +550,6 @@ def update():
         if wave_message_timer <= 0:
             message_text.text = ''
 
-    # ---------- ПУЛИ ИГРОКА ----------
     for bullet in bullets[:]:
         bullet.position += bullet.velocity * time.dt
         bullet.lifetime -= time.dt
@@ -668,7 +577,6 @@ def update():
                 destroy(bullet)
                 bullets.remove(bullet)
 
-    # ---------- ПУЛИ ВРАГОВ ----------
     for bullet in enemy_bullets[:]:
         bullet.position += bullet.direction * bullet.speed * time.dt
         bullet.lifetime -= time.dt
@@ -694,7 +602,6 @@ def update():
             destroy(bullet)
             enemy_bullets.remove(bullet)
 
-    # ---------- ПРОВЕРКА ОКОНЧАНИЯ ВОЛНЫ ----------
     if len(enemies) == 0 and not game_over:
         if current_wave + 1 < len(waves):
             start_wave(current_wave + 1)
@@ -702,7 +609,6 @@ def update():
             message_text.text = 'Поздравляем! Вы прошли все волны!'
             game_over = True
 
-    # ---------- УРОН ИГРОКУ (ближний бой) ----------
     for enemy_data in enemies:
         enemy_entity = enemy_data['entity']
         if not enemy_entity.enabled:
@@ -718,7 +624,6 @@ def update():
                     game_over = True
                 health_text.text = f'Health: {player_health}'
 
-    # ---------- АПТЕЧКИ ----------
     for pack in health_packs[:]:
         if not pack.enabled:
             continue
@@ -734,7 +639,6 @@ def update():
     else:
         update_ammo_ui(ammo_text, ammo_clip, ammo_reserve, reloading=True)
 
-# ---------- ВВОД ----------
 def input(key):
     global aiming
     global elevator, elevator_nearby
@@ -758,7 +662,6 @@ def input(key):
         fire_bullet()
         fire_timer = 0
 
-    # ---------- ПЕРЕКЛЮЧЕНИЕ ОРУЖИЯ КОЛЁСИКОМ ----------
     if key == 'scroll up':
         next_idx = active_weapon_index
         for i in range(1, 3):
@@ -778,34 +681,6 @@ def input(key):
                 break
         if prev_idx != active_weapon_index:
             switch_weapon(prev_idx)
-
-    # ---------- ВЫЗОВ ЛИФТА ----------
-    if key == 'e':
-        if elevator and elevator_nearby:
-            floor_index = 0 if player.y > -3 else 1
-            if elevator.current_floor == floor_index:
-                elevator.toggle_doors()
-            else:
-                elevator.call(floor_index)
-
-    if key == 'y':
-        if elevator:
-            ray_origin = camera.position
-            ray_direction = camera.forward
-            hit_info = raycast(ray_origin, ray_direction, distance=20, ignore=[player])
-            if hit_info.hit:
-                for btn in elevator.call_buttons:
-                    if hit_info.entity == btn:
-                        floor_idx = btn.floor_index
-                        elevator.call(floor_idx)
-                        break
-
-    if key == 'page up':
-        if elevator:
-            elevator.call(0)
-    if key == 'page down':
-        if elevator:
-            elevator.call(1)
 
 AmbientLight(color=color.rgb(150, 150, 150), intensity=0.5)
 app.run()

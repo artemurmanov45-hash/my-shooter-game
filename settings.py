@@ -1,5 +1,5 @@
 ROOM_SIZE = 40
-WALL_HEIGHT = 6.0
+WALL_HEIGHT = 40.0
 WALL_THICKNESS = 0.2
 DOOR_WIDTH = 8.0
 DOOR_HEIGHT = 3.0
@@ -10,8 +10,8 @@ PLAYER_MAX_HEALTH = 100
 GRID_SIZE = 3
 
 # ---------- НАСТРОЙКИ ОКНА ----------
-WINDOW_WIDTH = 1920
-WINDOW_HEIGHT = 1080
+WINDOW_WIDTH = 1280
+WINDOW_HEIGHT = 720
 
 # ---------- ТЕКСТУРЫ ----------
 TEXTURE_FLOOR = 'textures/floor.jpg'
@@ -32,6 +32,7 @@ SOUND_MENU_CLICK = 'sounds/menu_click.wav'
 SOUND_MENU_MUSIC = 'sounds/menu_music.wav'
 SOUND_GAME_MUSIC = 'sounds/game_music.wav'
 SOUND_RELOAD = 'sounds/reload.wav'
+SOUND_VOICE_RELOAD = 'sounds/voice_reload.wav'   # реплика героя при первой перезарядке
 
 # ---------- ГРОМКОСТЬ ----------
 VOLUME_GUNSHOT = 3.0
@@ -41,6 +42,7 @@ VOLUME_MENU_CLICK = 1.0
 VOLUME_MENU_MUSIC = 0.6
 VOLUME_GAME_MUSIC = 0.4
 VOLUME_RELOAD = 2.0
+VOLUME_VOICE_RELOAD = 1.5   # громкость голосовой реплики
 
 # ---------- ВРАГИ ----------
 ENEMY_WALK_SPEED = 4.0
@@ -52,8 +54,8 @@ ENEMY_MODEL = 'models/monster.glb'
 FIRE_RATE = 1
 
 # ---------- ПАРАМЕТРЫ СЕТКИ КОМНАТ ----------
-GRID_ROOMS_X = 5
-GRID_ROOMS_Z = 5
+GRID_ROOMS_X = 3
+GRID_ROOMS_Z = 3
 GRID_ROOM_WIDTH = 25
 GRID_ROOM_DEPTH = 25
 GRID_WALL_THICKNESS = 0.8
@@ -65,16 +67,13 @@ GRID_DOOR_PROBABILITY = 1.0
 HOLE_SIZE = 4.0
 
 # ---------- ОРУЖИЕ ----------
-# Основное (револьвер)
 REVOLVER_MODEL = 'models/revolver.glb'
-REVOLVER_SCALE = 0.002
-
-# Второе оружие (например, автомат)
-SECONDARY_WEAPON_MODEL = 'models/rifle.glb'   # если файла нет – будет куб-заглушка
+REVOLVER_SCALE = 0.5
+SECONDARY_WEAPON_MODEL = 'models/rifle.glb'
 SECONDARY_WEAPON_SCALE = 0.5
 
-# Количество пикапов на этаж
-PICKUP_COUNT_PER_FLOOR = 10
+# ---------- КОЛИЧЕСТВО ПИКАПОВ НА ЭТАЖ ----------
+PICKUP_COUNT_PER_FLOOR = 4
 
 # ---------- АНИМАЦИИ ОРУЖИЯ ----------
 WEAPON_ANIMATIONS = {

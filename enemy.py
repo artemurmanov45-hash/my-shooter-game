@@ -1,8 +1,9 @@
-# enemy.py (упрощённая версия с составными примитивами)
+
 from ursina import *
 import random
 import math
 from settings import *
+from room import building_objects   # <-- добавлен импорт
 
 class Enemy(Entity):
     def __init__(self, position, scale=1, health=1, body_color=color.red, armed=False, shoot_callback=None):
@@ -27,12 +28,10 @@ class Enemy(Entity):
         if armed:
             body_color = color.orange
 
-        # Тело
         self.torso = Entity(parent=self, model='cube', color=body_color,
                             scale=(0.6*s, 0.7*s, 0.4*s), position=(0, 0.9*s, 0))
         self.head = Entity(parent=self, model='sphere', color=color.peach,
                            scale=(0.35*s, 0.35*s, 0.35*s), position=(0, 1.7*s, 0))
-        # Глаза
         Entity(parent=self.head, model='sphere', color=color.white,
                scale=(0.08*s, 0.08*s, 0.04*s), position=(0.15*s, 0.1*s, 0.2*s))
         Entity(parent=self.head, model='sphere', color=color.white,
@@ -41,12 +40,10 @@ class Enemy(Entity):
                scale=(0.04*s, 0.04*s, 0.04*s), position=(0.17*s, 0.1*s, 0.22*s))
         Entity(parent=self.head, model='sphere', color=color.black,
                scale=(0.04*s, 0.04*s, 0.04*s), position=(-0.17*s, 0.1*s, 0.22*s))
-        # Руки
         self.arm_l = Entity(parent=self, model='cube', color=color.orange,
                             scale=(0.15*s, 0.6*s, 0.15*s), position=(-0.5*s, 0.9*s, 0))
         self.arm_r = Entity(parent=self, model='cube', color=color.orange,
                             scale=(0.15*s, 0.6*s, 0.15*s), position=(0.5*s, 0.9*s, 0))
-        # Ноги
         self.leg_l = Entity(parent=self, model='cube', color=color.brown,
                             scale=(0.2*s, 0.6*s, 0.2*s), position=(-0.25*s, 0.2*s, 0))
         self.leg_r = Entity(parent=self, model='cube', color=color.brown,
@@ -74,7 +71,6 @@ class Enemy(Entity):
             move_vec = dir_to_target.normalized() * ENEMY_WALK_SPEED * 0.3 * time.dt
 
         if move_vec.length() > 0:
-            # Коллизия по X
             dx = move_vec.x
             if dx != 0:
                 self.x += dx
@@ -90,7 +86,6 @@ class Enemy(Entity):
                 if hit.hit:
                     self.z -= dz
 
-        # Анимация ходьбы
         if move_vec.length() > 0:
             self.walk_cycle += time.dt * 8
             swing = math.sin(self.walk_cycle) * 0.4
@@ -106,7 +101,6 @@ class Enemy(Entity):
             self.leg_l.rotation_z = 0
             self.leg_r.rotation_z = 0
 
-        # Прыжки
         self.jump_timer += time.dt
         if self.jump_timer >= ENEMY_JUMP_INTERVAL and self.grounded:
             self.jump_timer = 0
@@ -116,12 +110,11 @@ class Enemy(Entity):
         if not self.grounded:
             self.velocity.y += self.gravity * time.dt
             self.position += self.velocity * time.dt
-            if self.position.y <= 0.5:
-                self.position.y = 0.5
+            if self.position.y <= 1.0:
+                self.position.y = 1.0
                 self.velocity.y = 0
                 self.grounded = True
 
-        # Стрельба с проверкой видимости
         if self.armed and self.shoot_callback and self.target and dist < self.shoot_range:
             eye_pos = self.position + Vec3(0, 0.9, 0)
             target_pos = self.target.position + Vec3(0, 0.5, 0)
@@ -152,15 +145,53 @@ class Enemy(Entity):
             return True
         return False
 
-def spawn_enemy(room_centers, enemies, health=1, scale=1, color=color.red, armed=False, shoot_callback=None):
+def spawn_enemy(room_centers, enemies, health=1, scale=1, color=color.red, armed=False, shoot_callback=None, player_pos=None):
+    print("spawn_enemy вызвана")
     if not room_centers:
+        print("spawn_enemy: room_centers пуст!")
         return None
-    cx, cz = random.choice(room_centers)
-    x = cx + random.uniform(-18, 18)
-    z = cz + random.uniform(-18, 18)
-    enemy = Enemy(position=(x, 0.5, z), scale=scale, health=health,
+
+    # Если есть позиция игрока, спавним рядом с ним
+    if player_pos is not None:
+        for attempt in range(30):
+            angle = random.uniform(0, 2 * math.pi)
+            radius = random.uniform(3, 6)
+            dx = radius * math.cos(angle)
+            dz = radius * math.sin(angle)
+            x = player_pos.x + dx
+            z = player_pos.z + dz
+            # Проверяем, что точка не в стене (raycast вниз)
+            hit_down = raycast(Vec3(x, 5, z), Vec3(0, -1, 0), distance=10)
+            # Если луч попал в стену – пропускаем
+            if hit_down.hit and hit_down.entity in building_objects:
+                continue
+            # Проверяем, что пол на высоте 1.0
+            if abs(hit_down.world_point.y - 1.0) > 0.5:
+                continue
+            # Проверяем, что точка не занята другим врагом
+            occupied = False
+            for enemy_data in enemies:
+                if distance(Vec3(x, 1.0, z), enemy_data['entity'].position) < 1.5:
+                    occupied = True
+                    break
+            if occupied:
+                continue
+            # Успех
+            break
+        else:
+            # Не нашли свободное место, спавним в центре здания
+            x, z = 0, 0
+    else:
+        # Если игрока нет, спавним в случайной комнате
+        cx, cz = random.choice(room_centers)
+        x = cx + random.uniform(-3, 3)
+        z = cz + random.uniform(-3, 3)
+
+    test_scale = scale * 2  # чуть меньше, но всё ещё заметно
+    enemy = Enemy(position=(x, 1.0, z), scale=test_scale, health=health,
                   body_color=color, armed=armed, shoot_callback=shoot_callback)
     enemies.append({'entity': enemy, 'health': health})
+    print(f"spawn_enemy: создан враг на ({x:.1f}, 1.0, {z:.1f}), health={health}, armed={armed}, scale={test_scale}")
     return enemy
 
 def spawn_explosion(pos):
